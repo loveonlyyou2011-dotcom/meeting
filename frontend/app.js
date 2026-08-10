@@ -1,7 +1,10 @@
+const CHUNK_DURATION_MS = 15000;
+
 let meetingId = null;
 let stream = null;
 let currentRecorder = null;
-let currentChunkPromise = Promise.resolve();
+let loopPromise = null;
+let pendingUploads = [];
 let stopRequested = true;
 let liveCursor = 0;
 let pollTimer = null;
@@ -47,8 +50,10 @@ async function uploadChunk(blob) {
 
 async function recordingLoop() {
   while (!stopRequested) {
-    currentChunkPromise = recordOneChunk(30000).then((blob) => uploadChunk(blob));
-    await currentChunkPromise;
+    const blob = await recordOneChunk(CHUNK_DURATION_MS);
+    // 업로드는 기다리지 않고 바로 다음 녹음을 시작한다 — 대기하면 그 사이 마이크가
+    // 비어 있어 발화가 소실된다. 업로드 완료는 finishMeeting에서 한꺼번에 기다린다.
+    pendingUploads.push(uploadChunk(blob));
   }
 }
 
@@ -85,9 +90,10 @@ async function startMeeting() {
   document.getElementById("live-captions").innerHTML = "";
   liveCursor = 0;
   stopRequested = false;
+  pendingUploads = [];
   showScreen("recording");
   startPolling();
-  recordingLoop();
+  loopPromise = recordingLoop();
 }
 
 async function finishMeeting() {
@@ -96,8 +102,9 @@ async function finishMeeting() {
     currentRecorder.stop();
   }
   clearInterval(pollTimer);
-  await currentChunkPromise;
+  await loopPromise; // 마지막 청크의 녹음이 끝나고 업로드가 큐에 들어갈 때까지 대기
   stream.getTracks().forEach((t) => t.stop());
+  await Promise.all(pendingUploads); // 아직 처리 중인 업로드(전사)가 모두 끝날 때까지 대기
 
   showScreen("processing");
   const res = await fetch(`/meetings/${meetingId}/finish`, { method: "POST" });
