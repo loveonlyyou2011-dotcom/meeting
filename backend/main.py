@@ -1,3 +1,5 @@
+import asyncio
+import json
 import subprocess
 from pathlib import Path
 
@@ -5,13 +7,14 @@ from dotenv import load_dotenv
 
 load_dotenv()  # transcribe.py/diarization.py가 import 시점에 환경변수를 읽으므로 가장 먼저 실행
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import align
 import diarization
+import live_transcribe
 import storage
 import summarize
 import transcribe
@@ -62,11 +65,9 @@ def upload_chunk(meeting_id: str, audio: UploadFile = File(...)):
     dst = chunks_dir / f"chunk_{idx:03d}{ext}"
     dst.write_bytes(audio.file.read())
     storage.add_chunk(meeting_id, idx, str(dst))
-
-    text = transcribe.transcribe_chunk_plain(dst)
-    if text:
-        storage.add_live_caption(meeting_id, idx, text)
-    return {"chunk_index": idx, "text": text}
+    # 실시간 자막은 /live-ws(Gemini Live API)가 전담한다. 이 청크는 회의 종료 후
+    # 화자분리·전체 전사를 위한 원본 오디오 확보 목적으로만 저장한다.
+    return {"chunk_index": idx}
 
 
 @app.get("/meetings/{meeting_id}/live")
@@ -75,6 +76,42 @@ def get_live_captions(meeting_id: str, after: int = 0):
     rows = storage.get_live_captions_after(meeting_id, after)
     last_id = rows[-1]["id"] if rows else after
     return {"captions": rows, "cursor": last_id}
+
+
+@app.websocket("/meetings/{meeting_id}/live-ws")
+async def live_ws(websocket: WebSocket, meeting_id: str):
+    if not storage.get_meeting(meeting_id):
+        await websocket.close(code=4404)
+        return
+
+    await websocket.accept()
+    caption_seq = 0
+
+    async def on_text(text: str) -> None:
+        nonlocal caption_seq
+        caption_seq += 1
+        storage.add_live_caption(meeting_id, caption_seq, text)
+        await websocket.send_text(json.dumps({"type": "text", "text": text}))
+
+    async def on_status(status: str) -> None:
+        await websocket.send_text(json.dumps({"type": "status", "text": status}))
+
+    transcriber = live_transcribe.LiveTranscriber(on_text=on_text, on_status=on_status)
+    run_task = asyncio.create_task(transcriber.run())
+
+    try:
+        while True:
+            data = await websocket.receive_bytes()
+            transcriber.push_audio(data)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        transcriber.stop()
+        run_task.cancel()
+        try:
+            await run_task
+        except (asyncio.CancelledError, Exception):
+            pass
 
 
 def _build_full_audio(meeting_id: str) -> Path:

@@ -6,10 +6,13 @@ let currentRecorder = null;
 let loopPromise = null;
 let pendingUploads = [];
 let stopRequested = true;
-let liveCursor = 0;
-let pollTimer = null;
 let lastMarkdown = "";
 let lastTitle = "회의";
+
+let liveSocket = null;
+let audioContext = null;
+let workletNode = null;
+let micSourceNode = null;
 
 const screens = ["start", "recording", "processing", "speakers", "report"];
 function showScreen(name) {
@@ -65,15 +68,51 @@ function appendCaption(text) {
   el.scrollTop = el.scrollHeight;
 }
 
-function startPolling() {
-  pollTimer = setInterval(async () => {
-    const res = await fetch(`/meetings/${meetingId}/live?after=${liveCursor}`);
-    const data = await res.json();
-    liveCursor = data.cursor;
-    for (const cap of data.captions) {
-      if (cap.text) appendCaption(cap.text);
+function setLiveStatus(text, cls) {
+  const el = document.getElementById("live-status");
+  el.textContent = text;
+  el.className = "badge" + (cls ? ` ${cls}` : "");
+}
+
+async function startLiveTranscription() {
+  const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+  liveSocket = new WebSocket(`${wsProtocol}//${location.host}/meetings/${meetingId}/live-ws`);
+  liveSocket.binaryType = "arraybuffer";
+
+  liveSocket.onopen = () => setLiveStatus("실시간 자막 연결됨", "connected");
+  liveSocket.onerror = () => setLiveStatus("실시간 자막 연결 오류", "error");
+  liveSocket.onclose = () => setLiveStatus("실시간 자막 연결 끊김", "error");
+  liveSocket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === "text" && data.text) {
+      appendCaption(data.text);
+    } else if (data.type === "status") {
+      setLiveStatus(data.text, data.text.includes("끊김") ? "error" : "connected");
     }
-  }, 10000);
+  };
+
+  audioContext = new AudioContext({ sampleRate: 16000 });
+  await audioContext.audioWorklet.addModule("/pcm-worklet.js");
+  micSourceNode = audioContext.createMediaStreamSource(stream);
+  workletNode = new AudioWorkletNode(audioContext, "pcm-worklet-processor");
+  workletNode.port.onmessage = (event) => {
+    if (liveSocket && liveSocket.readyState === WebSocket.OPEN) {
+      liveSocket.send(event.data);
+    }
+  };
+  micSourceNode.connect(workletNode);
+}
+
+function stopLiveTranscription() {
+  if (workletNode) workletNode.port.onmessage = null;
+  if (micSourceNode) micSourceNode.disconnect();
+  if (workletNode) workletNode.disconnect();
+  if (audioContext) audioContext.close();
+  if (liveSocket && liveSocket.readyState === WebSocket.OPEN) liveSocket.close();
+  audioContext = null;
+  workletNode = null;
+  micSourceNode = null;
+  liveSocket = null;
 }
 
 async function startMeeting() {
@@ -88,11 +127,10 @@ async function startMeeting() {
 
   stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   document.getElementById("live-captions").innerHTML = "";
-  liveCursor = 0;
   stopRequested = false;
   pendingUploads = [];
   showScreen("recording");
-  startPolling();
+  await startLiveTranscription();
   loopPromise = recordingLoop();
 }
 
@@ -101,7 +139,7 @@ async function finishMeeting() {
   if (currentRecorder && currentRecorder.state !== "inactive") {
     currentRecorder.stop();
   }
-  clearInterval(pollTimer);
+  stopLiveTranscription();
   await loopPromise; // 마지막 청크의 녹음이 끝나고 업로드가 큐에 들어갈 때까지 대기
   stream.getTracks().forEach((t) => t.stop());
   await Promise.all(pendingUploads); // 아직 처리 중인 업로드(전사)가 모두 끝날 때까지 대기

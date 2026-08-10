@@ -88,6 +88,18 @@ button:hover { filter: brightness(1.08); }
   50% { opacity: 0.3; }
 }
 
+.badge {
+  margin-left: auto;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--border);
+  opacity: 0.85;
+}
+
+.badge.connected { background: #16a34a; color: #fff; opacity: 1; }
+.badge.error { background: var(--danger); color: #fff; opacity: 1; }
+
 .captions {
   height: 320px;
   overflow-y: auto;
