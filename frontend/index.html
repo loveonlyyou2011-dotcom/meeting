@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>회의록 자동 생성</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="app">
+    <h1>회의록 자동 생성</h1>
+
+    <section id="screen-start" class="screen">
+      <label for="title-input">회의 제목</label>
+      <input id="title-input" type="text" placeholder="예: 8월 정기 회의" />
+      <button id="btn-start">회의 시작</button>
+    </section>
+
+    <section id="screen-recording" class="screen hidden">
+      <div class="status-row">
+        <span class="dot"></span>
+        <span>녹음 중… (자막은 최대 10초 지연될 수 있습니다)</span>
+      </div>
+      <div id="live-captions" class="captions"></div>
+      <button id="btn-finish" class="danger">회의 종료</button>
+    </section>
+
+    <section id="screen-processing" class="screen hidden">
+      <p>화자 분리 및 전사 처리 중입니다. 회의 길이에 따라 수십 초~수 분 소요될 수 있습니다…</p>
+      <div class="spinner"></div>
+    </section>
+
+    <section id="screen-speakers" class="screen hidden">
+      <h2>화자 이름 지정</h2>
+      <p>감지된 화자별로 샘플을 재생해보고 이름을 입력하세요. 비워두면 자동 라벨(예: SPEAKER_00)이 사용됩니다.</p>
+      <div id="speaker-list"></div>
+      <button id="btn-save-speakers">저장하고 회의록 생성</button>
+    </section>
+
+    <section id="screen-report" class="screen hidden">
+      <h2>회의록</h2>
+      <div id="report-content"></div>
+      <button id="btn-download">다운로드 (.md)</button>
+      <button id="btn-new-meeting">새 회의 시작</button>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
