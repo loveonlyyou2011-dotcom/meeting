@@ -13,7 +13,7 @@ def build_transcript_text(segments: list[dict], speaker_names: dict) -> str:
     lines = []
     for seg in segments:
         name = speaker_names.get(seg["speaker_label"], seg["speaker_label"])
-        lines.append(f"[{_format_timestamp(seg['start'])}] {name}: {seg['text']}")
+        lines.append(f"[{_format_timestamp(seg['start_ts'])}] {name}: {seg['text']}")
     return "\n".join(lines)
 
 

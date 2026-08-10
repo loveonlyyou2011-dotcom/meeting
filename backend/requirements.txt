@@ -3,6 +3,10 @@ uvicorn[standard]
 python-multipart
 python-dotenv
 google-genai
-pyannote.audio
-torch
+pyannote.audio<4.0
+torch==2.2.2
+torchaudio==2.2.2
+huggingface_hub<1.0
+numpy<2
+scipy<1.13
 soundfile

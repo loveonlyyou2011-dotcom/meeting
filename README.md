@@ -31,6 +31,9 @@
    - **HF_TOKEN**: https://huggingface.co/pyannote/speaker-diarization-3.1 에서 로그인 후
      라이선스 동의(Agree and access repository) → https://huggingface.co/settings/tokens 에서
      Read 권한 토큰 발급 (무료). 계정 로그인/약관 동의가 필요해 직접 진행하셔야 합니다.
+   - **주의**: `speaker-diarization-3.1` 파이프라인은 내부적으로 `pyannote/segmentation-3.0` 모델도
+     사용합니다. https://huggingface.co/pyannote/segmentation-3.0 에서도 별도로 라이선스 동의를
+     해주셔야 화자분리가 정상 동작합니다.
 
    `.env`는 `.gitignore`에 포함되어 있어 깃허브에 올려도 커밋되지 않습니다.
 

@@ -15,6 +15,7 @@ import diarization
 import storage
 import summarize
 import transcribe
+from ffmpeg_util import resolve_ffmpeg
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -90,7 +91,7 @@ def _build_full_audio(meeting_id: str) -> Path:
         src = Path(c["file_path"])
         dst = wav_dir / (src.stem + ".wav")
         subprocess.run(
-            ["ffmpeg", "-y", "-i", str(src), "-ar", "16000", "-ac", "1", str(dst)],
+            [resolve_ffmpeg(), "-y", "-i", str(src), "-ar", "16000", "-ac", "1", str(dst)],
             check=True,
             capture_output=True,
         )
@@ -102,7 +103,7 @@ def _build_full_audio(meeting_id: str) -> Path:
     )
     full_path = meeting_dir / "full.wav"
     subprocess.run(
-        ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(filelist), "-c", "copy", str(full_path)],
+        [resolve_ffmpeg(), "-y", "-f", "concat", "-safe", "0", "-i", str(filelist), "-c", "copy", str(full_path)],
         check=True,
         capture_output=True,
     )

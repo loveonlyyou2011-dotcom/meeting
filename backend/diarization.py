@@ -3,6 +3,8 @@ import subprocess
 from functools import lru_cache
 from pathlib import Path
 
+from ffmpeg_util import resolve_ffmpeg
+
 HF_TOKEN = os.environ.get("HF_TOKEN")
 if not HF_TOKEN:
     raise RuntimeError(
@@ -53,7 +55,7 @@ def extract_speaker_samples(
         out_path = out_dir / f"{label}.wav"
         subprocess.run(
             [
-                "ffmpeg",
+                resolve_ffmpeg(),
                 "-y",
                 "-ss",
                 str(info["start"]),
